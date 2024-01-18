@@ -33,8 +33,10 @@ class TimePlanner extends StatefulWidget {
   //Whether the time is displayed on the axis of the tim or on the center of the timeblock. Default is false.
   final bool setTimeOnAxis;
 
+  late final Map<String, List<TimePlannerTask>>? allTasksMap;
+
   /// Time planner widget
-  const TimePlanner({
+  TimePlanner({
     Key? key,
     required this.startHour,
     required this.endHour,
@@ -100,6 +102,21 @@ class _TimePlannerState extends State<TimePlanner> {
     config.borderRadius = style.borderRadius;
     isAnimated = widget.currentTimeAnimation;
     tasks = widget.tasks ?? [];
+    widget.allTasksMap = tasks.fold<Map<String, List<TimePlannerTask>>>(
+        <String, List<TimePlannerTask>>{},
+        (Map<String, List<TimePlannerTask>> map, TimePlannerTask task) {
+      String key = task.dateTime.day.toString();
+      if (map.containsKey(key)) {
+        map[key]!.add(task);
+      } else {
+        map[key] = <TimePlannerTask>[task];
+      }
+      return map;
+    });
+
+    tasks.forEach((task) {
+      task.setAllTasks(widget.allTasksMap!);
+    });
   }
 
   @override

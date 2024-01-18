@@ -1,4 +1,6 @@
 class TimePlannerDateTime {
+  DateTime dateTime;
+
   /// Day index from 0, this index dependence on your time planner header
   int day;
 
@@ -12,5 +14,6 @@ class TimePlannerDateTime {
     required this.day,
     required this.hour,
     required this.minutes,
+    required this.dateTime,
   });
 }
