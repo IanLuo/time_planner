@@ -53,10 +53,10 @@ class TimePlannerTask extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (offset, widthElement) =
+    final (offset, widthPercentage, padding) =
         findTaskPositionElements(_allTasksInTheDay, this);
-    double width =
-        (config.cellWidth!.toDouble() ?? 0) * widthElement.toDouble();
+    double width = ((config.cellWidth!.toDouble() ?? padding) - padding) *
+        widthPercentage.toDouble();
     double dayOffset = offset * (config.cellWidth!.toDouble() ?? 0) +
         this.dateTime.day * config.cellWidth!;
     return Positioned(
@@ -116,12 +116,12 @@ class TimePlannerTask extends StatelessWidget {
         range2.start.isBefore(range1.end);
   }
 
-  OverlappingNode _generateOverlappingTree(List<TimePlannerTask> allTasks) {
+  TaskTreeNode generateTaskTree(List<TimePlannerTask> allTasks) {
     var sortedTasks = allTasks
       ..sort((a, b) => (a.dateTime.day + a.dateTime.minutes)
           .compareTo((b.dateTime.day + b.dateTime.minutes)));
 
-    OverlappingNode root = OverlappingNode(null);
+    TaskTreeNode root = TaskTreeNode(null);
 
     if (sortedTasks.isEmpty) {
       return root;
@@ -146,7 +146,7 @@ class TimePlannerTask extends StatelessWidget {
       createNode(tasks.first, tasks.sublist(1));
     }
 
-    var firstNode = OverlappingNode(sortedTasks.first);
+    var firstNode = TaskTreeNode(sortedTasks.first);
     root.add(firstNode.task!);
 
     createNode(firstNode.task!, sortedTasks.sublist(1));
@@ -154,54 +154,86 @@ class TimePlannerTask extends StatelessWidget {
     return root;
   }
 
-  (double offset, double widthElement) findTaskPositionElements(
+  (double offset, double widthElement, double padding) findTaskPositionElements(
       List<TimePlannerTask> allTasks, TimePlannerTask currentTask) {
-    final theTree = _generateOverlappingTree(allTasks);
+    final theTree = generateTaskTree(allTasks);
+    final padding = 5;
 
     if (theTree.depth == 1) {
-      return (0, 1);
+      return (0, 1, padding * 2);
     }
 
     final node = theTree.findTask(currentTask);
     if (node == null) {
-      return (0, 1);
+      return (0, 1, 0);
     }
 
     final treeHeight = theTree.depth;
-    if (theTree.children.indexOf(node) != -1) {
-      final taskPercentage =
-          (treeHeight - theTree.heightOfChild(node)) / treeHeight;
-      return (0, 1);
-    } else {
-      double offset = 0;
-      double taskPercentage = 0;
-      final ancestors = node.ancesstors();
+    double offset = 0;
+    double taskPercentage = 0;
+    final ancestors = node.ancesstors()..removeLast();
 
-      for (var i = 0; i < ancestors.length; i++) {
-        final ancestor = ancestors[i];
-        final percentage =
-            (treeHeight - ancestor.ancesstors().length) / treeHeight;
-        taskPercentage += percentage;
-      }
-
-      return (offset, taskPercentage);
+    for (var i = 0; i < ancestors.length; i++) {
+      final ancestor = ancestors[i];
+      final percentage = 1 / (ancestor.branchLength);
+      offset += percentage;
     }
+
+    final rootWidthPercentage = 1 / node.branchLength;
+    if (node.branchLength == 1) {
+      taskPercentage = 1;
+    } else {
+      taskPercentage = rootWidthPercentage;
+    }
+
+    return (offset, taskPercentage, padding * 2);
   }
 }
 
-class OverlappingNode {
+class TaskTreeNode {
   final TimePlannerTask? task;
-  final List<OverlappingNode> children = [];
-  final OverlappingNode? parent;
+  final List<TaskTreeNode> children = [];
+  final TaskTreeNode? parent;
 
-  OverlappingNode(this.task, {this.parent});
+  TaskTreeNode(this.task, {this.parent});
 
-  OverlappingNode add(TimePlannerTask task) {
+  TaskTreeNode add(TimePlannerTask task) {
     var existing = this.findTask(task);
     if (existing != null) return existing;
-    var newNode = OverlappingNode(task, parent: this);
+    var newNode = TaskTreeNode(task, parent: this);
     children.add(newNode);
     return newNode;
+  }
+
+  TaskTreeNode get segmentHead {
+    return parent?.children.length != 1 ? this : parent!.segmentHead;
+  }
+
+  TaskTreeNode get segmentTail {
+    return children.length != 1 ? this : children.first.segmentTail;
+  }
+
+  List<TaskTreeNode> get segment {
+    final head = this.segmentHead;
+    final tail = this.segmentTail;
+
+    var segment = [head];
+
+    while (segment.last != tail) {
+      segment.add(segment.last.children.first);
+    }
+
+    return segment;
+  }
+
+  bool get isRoot => parent == null;
+
+  int get generation {
+    if (parent == null) {
+      return 0;
+    }
+
+    return parent!.generation + 1;
   }
 
   void remove(TimePlannerTask task) {
@@ -210,10 +242,10 @@ class OverlappingNode {
   }
 
   bool operator ==(Object node) {
-    if (node is OverlappingNode == false) {
+    if (node is TaskTreeNode == false) {
       return false;
     }
-    return this.task?.child == (node as OverlappingNode).task?.child;
+    return this.task?.child == (node as TaskTreeNode).task?.child;
   }
 
   @override
@@ -229,7 +261,9 @@ class OverlappingNode {
     return children.map((child) => child.depth).reduce(max) + 1;
   }
 
-  int heightOfChild(OverlappingNode child) {
+  int get branchLength => depth + generation - 1;
+
+  int heightOfChild(TaskTreeNode child) {
     if (child.children.isEmpty) {
       return 1;
     }
@@ -237,7 +271,7 @@ class OverlappingNode {
     return child.children.map((child) => child.depth).reduce(max) + 1;
   }
 
-  List<OverlappingNode> ancesstors() {
+  List<TaskTreeNode> ancesstors() {
     if (parent == null) {
       return [];
     }
@@ -245,7 +279,7 @@ class OverlappingNode {
     return [parent!, ...parent!.ancesstors()];
   }
 
-  OverlappingNode? findTask(TimePlannerTask task) {
+  TaskTreeNode? findTask(TimePlannerTask task) {
     if (this.task?.child == task.child) {
       return this;
     }
