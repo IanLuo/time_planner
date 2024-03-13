@@ -35,10 +35,12 @@ class TimePlanner extends StatefulWidget {
   final bool setTimeOnAxis;
 
   final DateTime currentDate;
+  final DateTimeRange range;
 
   late final Map<String, List<TimePlannerTask>>? allTasksMap;
 
   final Function(DateTime startDate, DateTime endDate)? onReserveBoxSelected;
+  final Function(DateTime currentDate)? onDateDisplay;
 
   /// Time planner widget
   TimePlanner(
@@ -48,12 +50,14 @@ class TimePlanner extends StatefulWidget {
       required this.headers,
       required this.alldayEvents,
       required this.currentDate,
+      required this.range,
       this.tasks,
       this.style,
       this.use24HourFormat = false,
       this.setTimeOnAxis = false,
       this.currentTimeAnimation,
-      this.onReserveBoxSelected})
+      this.onReserveBoxSelected,
+      this.onDateDisplay})
       : super(key: key);
   @override
   _TimePlannerState createState() => _TimePlannerState();
@@ -75,6 +79,7 @@ class _TimePlannerState extends State<TimePlanner> {
   bool _displayReserve = false;
   double _reserveOffsetY = 0;
   int offsetIndex = 0;
+  DateTime? _currentOutPutDay = null;
 
   /// check input value rules
   void _checkInputValue() {
@@ -87,6 +92,10 @@ class _TimePlannerState extends State<TimePlanner> {
     } else if (widget.headers.isEmpty) {
       throw FlutterError("header can't be empty");
     }
+  }
+
+  DateTime startOfDateTime(DateTime date) {
+    return DateTime(date.year, date.month, date.day, 0, 0, 0);
   }
 
   /// create local style
@@ -157,6 +166,44 @@ class _TimePlannerState extends State<TimePlanner> {
             duration: const Duration(milliseconds: 800),
             curve: Curves.easeOutCirc,
           );
+        }
+      }
+    });
+
+    final days = startOfDateTime(this.widget.currentDate)
+        .difference(startOfDateTime(this.widget.range.start))
+        .inDays;
+    final currentDayOffset = (config.cellWidth?.toDouble() ?? 1) * days;
+    Future.delayed(Duration.zero).then((_) {
+      this.mainHorizontalController.animateTo(currentDayOffset,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCirc);
+      this.dayHorizontalController.animateTo(currentDayOffset,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCirc);
+    });
+
+    this.mainHorizontalController.addListener(() {
+      final diff =
+          currentDayOffset - (this.mainHorizontalController.offset - 20);
+      final absDiff = diff.abs();
+      final days = (absDiff / (config.cellWidth ?? 1)).floor();
+      DateTime? outPutDay = null;
+
+      if (diff < 0) {
+        //To Right
+        outPutDay = this.widget.currentDate.add(Duration(days: days));
+      } else if ((diff > 0)) {
+        //To Left
+        outPutDay = this.widget.currentDate.add(Duration(days: -days));
+      }
+      if (this.widget.onDateDisplay != null) {
+        if (isSameDay(date1: _currentOutPutDay, date2: outPutDay) == true) {
+          return;
+        }
+        _currentOutPutDay = outPutDay;
+        if (_currentOutPutDay != null) {
+          this.widget.onDateDisplay!(_currentOutPutDay!);
         }
       }
     });
@@ -614,6 +661,18 @@ class _TimePlannerState extends State<TimePlanner> {
     final offsetXIndex = (positionX + mainHorizontalController.offset) /
         (config.cellWidth ?? 1.0).toDouble();
     return offsetXIndex.toInt();
+  }
+
+  bool isSameDay({required DateTime? date1, required DateTime? date2}) {
+    if (date1 == null) {
+      return false;
+    }
+    if (date2 == null) {
+      return false;
+    }
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
   }
 
   String formattedTime(int hour) {
