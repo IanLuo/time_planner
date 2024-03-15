@@ -3,11 +3,6 @@ import 'package:time_planner/src/config/global_config.dart' as config;
 
 /// Title widget for time planner
 class TimePlannerTitle extends StatelessWidget {
-  /// Title of each day, typically is name of the day for example sunday
-  ///
-  /// but you can set any things here
-  final String title;
-
   /// Text style for title
   final TextStyle? titleStyle;
 
@@ -20,7 +15,6 @@ class TimePlannerTitle extends StatelessWidget {
   /// Title widget for time planner
   const TimePlannerTitle({
     Key? key,
-    required this.title,
     this.date,
     this.titleStyle,
     this.dateStyle,
@@ -28,27 +22,17 @@ class TimePlannerTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 50,
+    return Container(
+      decoration: BoxDecoration(
+          border:
+              Border(right: BorderSide(color: Color(0xFFE9E9E9), width: 1))),
+      height: 30,
       width: config.cellWidth!.toDouble(),
       child: Center(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              title,
-              style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(
-              height: 3,
-            ),
-            Text(
-              date ?? '',
-              style: dateStyle ??
-                  const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ],
+        child: Text(
+          date ?? '',
+          style: dateStyle ??
+              const TextStyle(color: Color(0xFF5E5E5E), fontSize: 12),
         ),
       ),
     );

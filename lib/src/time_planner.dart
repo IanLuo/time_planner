@@ -268,7 +268,7 @@ class _TimePlannerState extends State<TimePlanner> {
                       children: [
                         (this.currentDayDistance == i)
                             ? Container(
-                                height: 50,
+                                height: 30,
                                 width: (config.cellWidth ?? 0).toDouble(),
                                 color: Color(0xFFF4F4F4),
                               )
@@ -288,7 +288,13 @@ class _TimePlannerState extends State<TimePlanner> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(
+                  Container(
+                    decoration: BoxDecoration(
+                        border: Border(
+                            right: BorderSide(
+                                width: 1.0,
+                                color: style.dividerColor ??
+                                    Theme.of(context).primaryColor))),
                     width: 60,
                     child: Center(
                       child: Text('All Day'),
