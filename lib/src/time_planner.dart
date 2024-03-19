@@ -38,13 +38,9 @@ class TimePlanner extends StatefulWidget {
   final bool setTimeOnAxis;
 
   DateTime currentDate;
+  final DateTime today;
   final DateTimeRange range;
-  final hightLiteDateController = BehaviorSubject<DateTime?>.seeded(null);
 
-  ScrollController _mainHorizontalController = ScrollController();
-  ScrollController _mainVerticalController = ScrollController();
-  ScrollController _dayHorizontalController = ScrollController();
-  ScrollController _timeVerticalController = ScrollController();
   late final Map<String, List<TimePlannerTask>>? allTasksMap;
   final Function(DateTime startDate, DateTime endDate)? onReserveBoxSelected;
   final Function(DateTime currentDate)? onDateDisplay;
@@ -58,6 +54,7 @@ class TimePlanner extends StatefulWidget {
       required this.headers,
       required this.alldayEvents,
       required this.currentDate,
+      required this.today,
       required this.range,
       this.tasks,
       this.style,
@@ -67,19 +64,9 @@ class TimePlanner extends StatefulWidget {
       this.onReserveBoxSelected,
       this.onDateDisplay,
       this.onScrolEnd})
-      : super(key: key) {
-    print("=============${this.currentDate}=============");
-  }
+      : super(key: key);
   @override
   _TimePlannerState createState() => _TimePlannerState();
-
-  void clearListener() {
-    hightLiteDateController.close();
-    _mainHorizontalController.dispose();
-    _mainVerticalController.dispose();
-    _dayHorizontalController.dispose();
-    _timeVerticalController.dispose();
-  }
 }
 
 final minuteOfHour = 60.0;
@@ -88,6 +75,10 @@ final defaultMinuteHeight =
 final _hourOfheight = minuteOfHour * defaultMinuteHeight;
 
 class _TimePlannerState extends State<TimePlanner> {
+  ScrollController mainHorizontalController = ScrollController();
+  ScrollController mainVerticalController = ScrollController();
+  ScrollController dayHorizontalController = ScrollController();
+  ScrollController timeVerticalController = ScrollController();
   TimePlannerbloc bloc = TimePlannerbloc();
   TimePlannerStyle style = TimePlannerStyle();
   List<TimePlannerTask> tasks = [];
@@ -128,7 +119,6 @@ class _TimePlannerState extends State<TimePlanner> {
   void _initData() {
     _checkInputValue();
     _convertToLocalStyle();
-    this.widget.hightLiteDateController.add(this.widget.currentDate);
     config.horizontalTaskPadding = style.horizontalTaskPadding;
     config.cellHeight = style.cellHeight;
     config.cellWidth = style.cellWidth;
@@ -159,58 +149,31 @@ class _TimePlannerState extends State<TimePlanner> {
     });
   }
 
-  _listener(date) {
-    if (date != null) {
-      final currentDayOffset = offsetOfDate(date);
-
-      print(
-          '===Range: ${this.widget.range} Date: ${date}, offset: ${currentDayOffset}===');
-      Future.delayed(Duration.zero).then((_) {
-        this.widget._mainHorizontalController.animateTo(currentDayOffset,
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeOutCirc);
-        this.widget._dayHorizontalController.animateTo(currentDayOffset,
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeOutCirc);
-      });
-
-      setState(() {
-        this.currentDayDistance =
-            widget.range.start.difference(date).inDays.abs();
-      });
-    }
-  }
-
   void _addListen() {
-    this.widget.hightLiteDateController.listen(_listener);
-
     Future.delayed(Duration.zero).then((_) {
       int hour = DateTime.now().hour;
       if (isAnimated != null && isAnimated == true) {
         if (hour > widget.startHour) {
           double scrollOffset =
               (hour - widget.startHour) * config.cellHeight!.toDouble();
-          this.widget._mainVerticalController.animateTo(
-                scrollOffset,
-                duration: const Duration(milliseconds: 800),
-                curve: Curves.easeOutCirc,
-              );
-          this.widget._timeVerticalController.animateTo(
-                scrollOffset,
-                duration: const Duration(milliseconds: 800),
-                curve: Curves.easeOutCirc,
-              );
+          mainVerticalController.animateTo(
+            scrollOffset,
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOutCirc,
+          );
+          timeVerticalController.animateTo(
+            scrollOffset,
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOutCirc,
+          );
         }
       }
     });
 
     final currentDayOffset = offsetOfDate(this.widget.currentDate);
 
-    this.widget._mainHorizontalController.addListener(() {
-      this
-          .widget
-          ._dayHorizontalController
-          .jumpTo(this.widget._mainHorizontalController.offset);
+    mainHorizontalController.addListener(() {
+      dayHorizontalController.jumpTo(mainHorizontalController.offset);
 
       final outPutDay = outputDayOfOffset(currentDayOffset: currentDayOffset);
 
@@ -225,11 +188,19 @@ class _TimePlannerState extends State<TimePlanner> {
       }
     });
 
-    this.widget._mainVerticalController.addListener(() {
-      this
-          .widget
-          ._timeVerticalController
-          .jumpTo(this.widget._mainVerticalController.offset);
+    mainVerticalController.addListener(() {
+      timeVerticalController.jumpTo(mainVerticalController.offset);
+    });
+  }
+
+  void animateToDayOffset(double dayOffSet) {
+    Future.delayed(Duration.zero).then((_) {
+      mainHorizontalController.animateTo(dayOffSet,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCirc);
+      dayHorizontalController.animateTo(dayOffSet,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCirc);
     });
   }
 
@@ -238,16 +209,12 @@ class _TimePlannerState extends State<TimePlanner> {
     _addListen();
     _initData();
     super.initState();
-  }
-
-  @override
-  void didUpdateWidget(TimePlanner oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    print('in update: ${this.widget.currentDate}');
-    oldWidget.clearListener();
-    _addListen();
-    _initData();
-    setState(() {});
+    final currentDayOffset = offsetOfDate(this.widget.currentDate);
+    animateToDayOffset(currentDayOffset);
+    setState(() {
+      this.currentDayDistance =
+          widget.range.start.difference(this.widget.today).inDays.abs();
+    });
   }
 
   bool onScrollNotification(ScrollNotification notification) {
@@ -257,21 +224,17 @@ class _TimePlannerState extends State<TimePlanner> {
         //Scroll End
 
         final currentDayOffset = offsetOfDate(this.widget.currentDate);
-        final diff =
-            currentDayOffset - this.widget._mainHorizontalController.offset;
+        final diff = currentDayOffset - mainHorizontalController.offset;
         DateTime? outPutDay = outputDayOfOffset(
             currentDayOffset: currentDayOffset, diffOffset: diff);
         if (outPutDay == null) {
           return false;
         }
         final outputOffset = offsetOfDate(outPutDay);
+        animateToDayOffset(outputOffset);
         if (this.widget.onScrolEnd != null) {
           this.widget.onScrolEnd!(outPutDay!);
         }
-        this.widget.hightLiteDateController.sink.add(outPutDay!);
-        setState(() {
-          this.widget.currentDate = outPutDay;
-        });
       }
     }
     return false;
@@ -279,7 +242,6 @@ class _TimePlannerState extends State<TimePlanner> {
 
   @override
   void dispose() {
-    this.widget.hightLiteDateController.close();
     super.dispose();
   }
 
@@ -296,36 +258,31 @@ class _TimePlannerState extends State<TimePlanner> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             SingleChildScrollView(
-              controller: this.widget._dayHorizontalController,
+              controller: dayHorizontalController,
               scrollDirection: Axis.horizontal,
               physics: const NeverScrollableScrollPhysics(),
-              child: StreamBuilder(
-                stream: this.widget.hightLiteDateController,
-                builder: (context, snapshot) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      const SizedBox(
-                        width: 60,
-                      ),
-                      for (int i = 0; i < config.totalDays; i++)
-                        Stack(
-                          children: [
-                            (this.currentDayDistance == i)
-                                ? Container(
-                                    height: 30,
-                                    width: (config.cellWidth ?? 0).toDouble(),
-                                    color: Color(0xFFF4F4F4),
-                                  )
-                                : SizedBox.shrink(),
-                            widget.headers[i]
-                          ],
-                        ),
-                    ],
-                  );
-                },
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const SizedBox(
+                    width: 60,
+                  ),
+                  for (int i = 0; i < config.totalDays; i++)
+                    Stack(
+                      children: [
+                        (this.currentDayDistance == i)
+                            ? Container(
+                                height: 30,
+                                width: (config.cellWidth ?? 0).toDouble(),
+                                color: Color(0xFFF4F4F4),
+                              )
+                            : SizedBox.shrink(),
+                        widget.headers[i]
+                      ],
+                    ),
+                ],
               ),
             ),
             Container(
@@ -351,72 +308,66 @@ class _TimePlannerState extends State<TimePlanner> {
                   ),
                   Flexible(
                       child: SingleChildScrollView(
-                    controller: this.widget._dayHorizontalController,
+                    controller: dayHorizontalController,
                     scrollDirection: Axis.horizontal,
                     physics: const NeverScrollableScrollPhysics(),
-                    child: StreamBuilder(
-                      stream: this.widget.hightLiteDateController,
-                      builder: (context, snapshot) {
-                        return Container(
-                          height: 34,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              for (int i = 0; i < config.totalDays; i++)
-                                Stack(
-                                  children: [
-                                    (this.currentDayDistance == i)
-                                        ? Container(
-                                            height: 34,
-                                            width: (config.cellWidth ?? 0)
-                                                .toDouble(),
-                                            color: Color(0xFFF4F4F4),
-                                          )
-                                        : SizedBox.shrink(),
-                                    Container(
-                                      height: 34,
-                                      width: config.cellWidth?.toDouble() ?? 0,
-                                      decoration: BoxDecoration(
-                                          border: Border.all(
-                                              color: style.dividerColor ??
-                                                  Theme.of(context)
-                                                      .primaryColor,
-                                              width: 1)),
-                                      child: SingleChildScrollView(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: (widget.alldayEvents[i])
-                                              .map((e) => Column(
-                                                    children: [
-                                                      SizedBox(
-                                                        height: 8,
-                                                      ),
-                                                      Container(
-                                                        height: 18,
-                                                        width: config.cellWidth
-                                                                ?.toDouble() ??
-                                                            0.0,
-                                                        padding: EdgeInsets
-                                                            .symmetric(
-                                                                horizontal: 8),
-                                                        child: e.child ??
-                                                            SizedBox.shrink(),
-                                                      )
-                                                    ],
-                                                  ))
-                                              .toList(),
-                                        ),
-                                      ),
+                    child: Container(
+                      height: 34,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          for (int i = 0; i < config.totalDays; i++)
+                            Stack(
+                              children: [
+                                (this.currentDayDistance == i)
+                                    ? Container(
+                                        height: 34,
+                                        width:
+                                            (config.cellWidth ?? 0).toDouble(),
+                                        color: Color(0xFFF4F4F4),
+                                      )
+                                    : SizedBox.shrink(),
+                                Container(
+                                  height: 34,
+                                  width: config.cellWidth?.toDouble() ?? 0,
+                                  decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: style.dividerColor ??
+                                              Theme.of(context).primaryColor,
+                                          width: 1)),
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: (widget.alldayEvents[i])
+                                          .map((e) => Column(
+                                                children: [
+                                                  SizedBox(
+                                                    height: 8,
+                                                  ),
+                                                  Container(
+                                                    height: 18,
+                                                    width: config.cellWidth
+                                                            ?.toDouble() ??
+                                                        0.0,
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 8),
+                                                    child: e.child ??
+                                                        SizedBox.shrink(),
+                                                  )
+                                                ],
+                                              ))
+                                          .toList(),
                                     ),
-                                  ],
-                                )
-                            ],
-                          ),
-                        );
-                      },
+                                  ),
+                                ),
+                              ],
+                            )
+                        ],
+                      ),
                     ),
                   ))
                 ]),
@@ -429,7 +380,7 @@ class _TimePlannerState extends State<TimePlanner> {
                         .copyWith(scrollbars: false),
                     child: SingleChildScrollView(
                       physics: const NeverScrollableScrollPhysics(),
-                      controller: this.widget._timeVerticalController,
+                      controller: timeVerticalController,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
@@ -483,8 +434,8 @@ class _TimePlannerState extends State<TimePlanner> {
     return GestureDetector(
         onLongPressStart: (details) {
           setState(() {
-            _reserveOffsetY = details.localPosition.dy +
-                this.widget._mainVerticalController.offset;
+            _reserveOffsetY =
+                details.localPosition.dy + mainVerticalController.offset;
             _displayReserve = true;
             offsetIndex = offsetXIndex(details.localPosition.dx);
           });
@@ -493,18 +444,23 @@ class _TimePlannerState extends State<TimePlanner> {
           setState(() {
             offsetIndex = offsetXIndex(details.localPosition.dx);
             _displayReserve = false;
-            _reserveOffsetY = details.localPosition.dy +
-                this.widget._mainVerticalController.offset;
+            _reserveOffsetY =
+                details.localPosition.dy + mainVerticalController.offset;
             if (this.widget.onReserveBoxSelected != null) {
               final startHour = formatTime(hour);
               final endHour = formatTime(hour + 1);
-              DateTime offsetDate = this.widget.currentDate;
-              if (offsetIndex > 0) {
-                offsetDate =
-                    this.widget.currentDate.add(Duration(days: offsetIndex));
+              DateTime todayOffset = this.widget.today;
+              final diffIndex = this.currentDayDistance - offsetIndex;
+              if (diffIndex > 0) {
+                todayOffset =
+                    this.widget.today.add(Duration(days: -(diffIndex.abs())));
+              } else if (diffIndex < 0) {
+                todayOffset =
+                    this.widget.today.add(Duration(days: diffIndex.abs()));
               }
-              final startTime = combineDateTime(offsetDate, startHour);
-              final endTime = combineDateTime(offsetDate, endHour);
+              final startTime = combineDateTime(todayOffset, startHour);
+              final endTime = combineDateTime(todayOffset, endHour);
+              print("StartDate: ${startTime} EndDate: ${endTime}");
               this.widget.onReserveBoxSelected!(startTime, endTime);
             }
           });
@@ -512,23 +468,23 @@ class _TimePlannerState extends State<TimePlanner> {
         onLongPressMoveUpdate: (details) {
           setState(() {
             offsetIndex = offsetXIndex(details.localPosition.dx);
-            _reserveOffsetY = details.localPosition.dy +
-                this.widget._mainVerticalController.offset;
+            _reserveOffsetY =
+                details.localPosition.dy + mainVerticalController.offset;
           });
         },
         onLongPressDown: (details) {
           setState(() {
             offsetIndex = offsetXIndex(details.localPosition.dx);
-            _reserveOffsetY = details.localPosition.dy +
-                this.widget._mainVerticalController.offset;
+            _reserveOffsetY =
+                details.localPosition.dy + mainVerticalController.offset;
           });
         },
         child: SingleChildScrollView(
-          controller: this.widget._mainVerticalController,
+          controller: mainVerticalController,
           child: NotificationListener<ScrollNotification>(
               onNotification: onScrollNotification,
               child: SingleChildScrollView(
-                controller: this.widget._mainHorizontalController,
+                controller: mainHorizontalController,
                 scrollDirection: Axis.horizontal,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -607,6 +563,7 @@ class _TimePlannerState extends State<TimePlanner> {
                               _displayReserve == true
                                   ? CurrentReservedEventBox(
                                       offsetXIndex: this.offsetIndex,
+                                      todayIndex: this.currentDayDistance,
                                       cellWidth:
                                           config.cellWidth?.toDouble() ?? 0.0,
                                       date: DateTime.now(), //this.widget..date,
@@ -638,9 +595,8 @@ class _TimePlannerState extends State<TimePlanner> {
   }
 
   int offsetXIndex(double positionX) {
-    final offsetXIndex =
-        (positionX + this.widget._mainHorizontalController.offset) /
-            (config.cellWidth ?? 1.0).toDouble();
+    final offsetXIndex = (positionX + mainHorizontalController.offset) /
+        (config.cellWidth ?? 1.0).toDouble();
     return offsetXIndex.toInt();
   }
 
@@ -674,8 +630,7 @@ class _TimePlannerState extends State<TimePlanner> {
   DateTime? outputDayOfOffset(
       {required double currentDayOffset, double? diffOffset}) {
     final diff = diffOffset ??
-        (currentDayOffset -
-            (this.widget._mainHorizontalController.offset - 60));
+        (currentDayOffset - (mainHorizontalController.offset - 60));
 
     final absDiff = diff.abs();
     final offsetOfDays = (absDiff / (config.cellWidth ?? 1));
@@ -759,6 +714,7 @@ class CurrentReservedEventBox extends StatelessWidget {
   final double currentHour;
   final double cellWidth;
   final int offsetXIndex;
+  final int todayIndex;
   final _hourOfheight = minuteOfHour * defaultMinuteHeight;
   CurrentReservedEventBox(
       {Key? key,
@@ -767,6 +723,7 @@ class CurrentReservedEventBox extends StatelessWidget {
       required this.startTime,
       required this.endTime,
       required this.offsetXIndex,
+      required this.todayIndex,
       required this.cellWidth})
       : super(key: key);
 
@@ -774,8 +731,12 @@ class CurrentReservedEventBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final left = (config.cellWidth ?? 0) * this.offsetXIndex;
     DateTime currentDate = this.date;
-    if (this.offsetXIndex > 0) {
-      currentDate = this.date.add(Duration(days: offsetXIndex));
+    final offset = this.todayIndex - this.offsetXIndex;
+    if (offset > 0) {
+      currentDate = this.date.add(Duration(days: -(offset.abs())));
+    }
+    if (offset < 0) {
+      currentDate = this.date.add(Duration(days: offset.abs()));
     }
     return Positioned(
       top: currentHour * _hourOfheight,
