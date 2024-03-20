@@ -81,7 +81,7 @@ class _TimePlannerState extends State<TimePlanner> {
   ScrollController timeVerticalController = ScrollController();
   TimePlannerbloc bloc = TimePlannerbloc();
   TimePlannerStyle style = TimePlannerStyle();
-  List<TimePlannerTask> tasks = [];
+  BehaviorSubject<List<TimePlannerTask>> tasks = BehaviorSubject.seeded([]);
   bool? isAnimated = true;
   bool _displayReserve = false;
   double _reserveOffsetY = 0;
@@ -129,8 +129,8 @@ class _TimePlannerState extends State<TimePlanner> {
     config.setTimeOnAxis = widget.setTimeOnAxis;
     config.borderRadius = style.borderRadius;
     isAnimated = widget.currentTimeAnimation;
-    tasks = widget.tasks ?? [];
-    widget.allTasksMap = tasks.fold<Map<String, List<TimePlannerTask>>>(
+    final allTasks = widget.tasks ?? [];
+    widget.allTasksMap = allTasks.fold<Map<String, List<TimePlannerTask>>>(
         <String, List<TimePlannerTask>>{},
         (Map<String, List<TimePlannerTask>> map, TimePlannerTask task) {
       String key =
@@ -144,9 +144,10 @@ class _TimePlannerState extends State<TimePlanner> {
       return map;
     });
 
-    tasks.forEach((task) {
+    allTasks.forEach((task) {
       task.setAllTasks(widget.allTasksMap!);
     });
+    tasks.add(allTasks);
   }
 
   void _addListen() {
@@ -217,6 +218,32 @@ class _TimePlannerState extends State<TimePlanner> {
     });
   }
 
+  @override
+  void didUpdateWidget(TimePlanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    setState(() {
+      final allTasks = widget.tasks ?? [];
+      widget.allTasksMap = allTasks.fold<Map<String, List<TimePlannerTask>>>(
+          <String, List<TimePlannerTask>>{},
+          (Map<String, List<TimePlannerTask>> map, TimePlannerTask task) {
+        String key =
+            "${task.dateTime.dateTime.year}${task.dateTime.dateTime.month}${task.dateTime.dateTime.day}";
+        // task.dateTime.day.toString();
+        if (map.containsKey(key)) {
+          map[key]!.add(task);
+        } else {
+          map[key] = <TimePlannerTask>[task];
+        }
+        return map;
+      });
+
+      allTasks.forEach((task) {
+        task.setAllTasks(widget.allTasksMap!);
+      });
+      tasks.add(allTasks);
+    });
+  }
+
   bool onScrollNotification(ScrollNotification notification) {
     if (notification.metrics.axisDirection == AxisDirection.left ||
         notification.metrics.axisDirection == AxisDirection.right) {
@@ -248,7 +275,6 @@ class _TimePlannerState extends State<TimePlanner> {
   @override
   Widget build(BuildContext context) {
     // we need to update the tasks list in case the tasks have changed
-    tasks = widget.tasks ?? [];
     return GestureDetector(
       child: Container(
         color: style.backgroundColor,
@@ -496,83 +522,100 @@ class _TimePlannerState extends State<TimePlanner> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        SizedBox(
-                          height: (config.totalHours * config.cellHeight!) + 80,
-                          width:
-                              (config.totalDays * config.cellWidth!).toDouble(),
-                          child: Stack(
-                            children: <Widget>[
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
+                        StreamBuilder<List<TimePlannerTask>>(
+                          stream: tasks,
+                          builder: (context, snapshot) {
+                            final tasks = snapshot.data ?? [];
+                            return SizedBox(
+                              height:
+                                  (config.totalHours * config.cellHeight!) + 80,
+                              width: (config.totalDays * config.cellWidth!)
+                                  .toDouble(),
+                              child: Stack(
                                 children: <Widget>[
-                                  for (var i = 0; i < config.totalHours; i++)
-                                    Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        SizedBox(
-                                          height: (config.cellHeight! - 1)
-                                              .toDouble(),
-                                        ),
-                                        const Divider(
-                                          height: 1,
-                                        ),
-                                      ],
-                                    )
-                                ],
-                              ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  for (var i = 0; i < config.totalDays; i++)
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        (this.currentDayDistance == i)
-                                            ? Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: <Widget>[
-                                                  Container(
-                                                    width: ((config.cellWidth ??
-                                                                0) -
-                                                            1)
-                                                        .toDouble(),
-                                                    height: (config.totalHours *
-                                                            config
-                                                                .cellHeight!) +
-                                                        config.cellHeight!,
-                                                    color: Color(0xFFF4F4F4),
-                                                  )
-                                                ],
-                                              )
-                                            : SizedBox(
-                                                width: (config.cellWidth! - 1)
-                                                    .toDouble(),
-                                              ),
-                                        Container(
-                                          width: 1,
-                                          height: (config.totalHours *
-                                                  config.cellHeight!) +
-                                              config.cellHeight!,
-                                          color: Colors.black12,
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      for (var i = 0;
+                                          i < config.totalHours;
+                                          i++)
+                                        Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: <Widget>[
+                                            SizedBox(
+                                              height: (config.cellHeight! - 1)
+                                                  .toDouble(),
+                                            ),
+                                            const Divider(
+                                              height: 1,
+                                            ),
+                                          ],
                                         )
-                                      ],
-                                    )
+                                    ],
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      for (var i = 0; i < config.totalDays; i++)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: <Widget>[
+                                            (this.currentDayDistance == i)
+                                                ? Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: <Widget>[
+                                                      Container(
+                                                        width:
+                                                            ((config.cellWidth ??
+                                                                        0) -
+                                                                    1)
+                                                                .toDouble(),
+                                                        height: (config
+                                                                    .totalHours *
+                                                                config
+                                                                    .cellHeight!) +
+                                                            config.cellHeight!,
+                                                        color:
+                                                            Color(0xFFF4F4F4),
+                                                      )
+                                                    ],
+                                                  )
+                                                : SizedBox(
+                                                    width:
+                                                        (config.cellWidth! - 1)
+                                                            .toDouble(),
+                                                  ),
+                                            Container(
+                                              width: 1,
+                                              height: (config.totalHours *
+                                                      config.cellHeight!) +
+                                                  config.cellHeight!,
+                                              color: Colors.black12,
+                                            )
+                                          ],
+                                        )
+                                    ],
+                                  ),
+                                  for (int i = 0; i < tasks.length; i++)
+                                    tasks[i],
+                                  _displayReserve == true
+                                      ? CurrentReservedEventBox(
+                                          offsetXIndex: this.offsetIndex,
+                                          todayIndex: this.currentDayDistance,
+                                          cellWidth:
+                                              config.cellWidth?.toDouble() ??
+                                                  0.0,
+                                          date: DateTime
+                                              .now(), //this.widget..date,
+                                          currentHour: hour,
+                                          startTime: formatTime(hour),
+                                          endTime: formatTime(hour + 1))
+                                      : SizedBox.shrink()
                                 ],
                               ),
-                              for (int i = 0; i < tasks.length; i++) tasks[i],
-                              _displayReserve == true
-                                  ? CurrentReservedEventBox(
-                                      offsetXIndex: this.offsetIndex,
-                                      todayIndex: this.currentDayDistance,
-                                      cellWidth:
-                                          config.cellWidth?.toDouble() ?? 0.0,
-                                      date: DateTime.now(), //this.widget..date,
-                                      currentHour: hour,
-                                      startTime: formatTime(hour),
-                                      endTime: formatTime(hour + 1))
-                                  : SizedBox.shrink()
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
